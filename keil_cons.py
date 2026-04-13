@@ -86,17 +86,30 @@ def find_project(search_dir: str = ".") -> str:
             print(f"无效输入，请输入 1-{len(projects)} 之间的数字。")
 
 
-def get_log_path(project_path: str) -> str:
-    """在工程所在目录生成编译日志文件路径。
+def get_log_path(project_path: str, command: str = None) -> str:
+    """在工程所在目录生成日志文件路径。
 
     Args:
         project_path: 工程文件路径。
+        command: UV4 命令，用于区分日志文件名。
 
     Returns:
         日志文件完整路径。
     """
     project_dir = os.path.dirname(os.path.abspath(project_path))
-    return os.path.join(project_dir, "BuildLog.log")
+    log_name_map = {
+        "-b": "BuildLog.log",
+        "-r": "RebuildLog.log",
+        "-cr": "CleanRebuildLog.log",
+        "-f": "FlashLog.log",
+    }
+    log_name = log_name_map.get(command, "KeilCommand.log")
+    return os.path.join(project_dir, log_name)
+
+
+def should_use_log(command: str) -> bool:
+    """判断命令是否默认生成日志文件。"""
+    return command in {"-b", "-r", "-cr"}
 
 
 def run_uv4(uv4_path: str, project_path: str, command: str,
@@ -134,10 +147,11 @@ def run_uv4(uv4_path: str, project_path: str, command: str,
         sys.exit(130)
 
 
-def print_result(returncode: int, log_path: str = None):
+def print_result(action_desc: str, returncode: int, log_path: str = None):
     """打印执行结果。
 
     Args:
+        action_desc: 当前执行动作描述。
         returncode: UV4 退出码。
         log_path: 日志文件路径。
     """
@@ -156,7 +170,7 @@ def print_result(returncode: int, log_path: str = None):
     status = "成功" if returncode in (0, 1) else "失败"
 
     print(f"\n{'='*50}")
-    print(f"编译结果: [{status}] {msg}")
+    print(f"{action_desc}结果: [{status}] {msg}")
     if log_path and os.path.isfile(log_path):
         print(f"日志文件: {log_path}")
     print(f"{'='*50}")
@@ -215,17 +229,18 @@ def interactive_mode(uv4_path: str):
         # 编译所有目标需要额外 -z 参数
         extra_args = ["-z"] if choice == "6" else []
 
-        log_path = get_log_path(project_path)
+        log_path = get_log_path(project_path, cmd) if should_use_log(cmd) else None
         full_cmd = [uv4_path, cmd, project_path, "-j0"]
         if target:
             full_cmd.extend(["-t", target])
         full_cmd.extend(extra_args)
-        full_cmd.extend(["-o", log_path])
+        if log_path:
+            full_cmd.extend(["-o", log_path])
 
         print(f"\n[执行] {desc}: {' '.join(full_cmd)}")
         try:
             result = subprocess.run(full_cmd)
-            print_result(result.returncode, log_path)
+            print_result(desc, result.returncode, log_path)
         except KeyboardInterrupt:
             print("\n[中断] 用户取消操作。")
 
@@ -348,18 +363,21 @@ UV4 退出码:
         cmd = "-b"
         desc = "编译"
 
-    # 日志路径
-    log_path = args.output or get_log_path(project_path)
+    # 仅编译相关命令默认生成日志；下载/清理仅在显式指定 -o 时输出日志
+    log_path = args.output
+    if log_path is None and should_use_log(cmd):
+        log_path = get_log_path(project_path, cmd)
 
     # 构建命令 (默认隐藏 GUI)
     full_cmd = [uv4_path, cmd, project_path, "-j0"]
     if args.target:
         full_cmd.extend(["-t", args.target])
-    full_cmd.extend(["-o", log_path])
+    if log_path:
+        full_cmd.extend(["-o", log_path])
 
     print(f"[执行] {desc}: {' '.join(full_cmd)}")
     returncode = subprocess.run(full_cmd).returncode
-    print_result(returncode, log_path)
+    print_result(desc, returncode, log_path)
 
     # 退出码 0 和 1 都视为成功
     sys.exit(0 if returncode in (0, 1) else returncode)
