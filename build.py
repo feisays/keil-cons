@@ -12,6 +12,7 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SPEC_FILE = os.path.join(SCRIPT_DIR, "keil_cons.spec")
+ENTRY_FILE = os.path.join(SCRIPT_DIR, "keil_cons.py")
 BUILD_DIR = os.path.join(SCRIPT_DIR, "build")
 DIST_DIR = os.path.join(SCRIPT_DIR, "dist")
 
@@ -43,11 +44,28 @@ def clean():
 
 def build():
     """调用 PyInstaller 执行构建。"""
-    print(f"\n[构建] pyinstaller {os.path.relpath(SPEC_FILE, SCRIPT_DIR)}")
-    result = subprocess.run(
-        [sys.executable, "-m", "PyInstaller", SPEC_FILE],
-        cwd=SCRIPT_DIR,
-    )
+    if os.path.isfile(SPEC_FILE):
+        print(f"\n[构建] pyinstaller {os.path.relpath(SPEC_FILE, SCRIPT_DIR)}")
+        cmd = [sys.executable, "-m", "PyInstaller", SPEC_FILE]
+    else:
+        if not os.path.isfile(ENTRY_FILE):
+            print(f"\n[失败] 未找到构建入口: {ENTRY_FILE}")
+            sys.exit(1)
+        print("\n[提示] 未找到 keil_cons.spec，改为直接打包 keil_cons.py")
+        print(f"[构建] pyinstaller --clean --noconfirm --onefile --name keil_cons {os.path.relpath(ENTRY_FILE, SCRIPT_DIR)}")
+        cmd = [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--clean",
+            "--noconfirm",
+            "--onefile",
+            "--name",
+            "keil_cons",
+            ENTRY_FILE,
+        ]
+
+    result = subprocess.run(cmd, cwd=SCRIPT_DIR)
     if result.returncode != 0:
         print(f"\n[失败] PyInstaller 退出码: {result.returncode}")
         sys.exit(result.returncode)
