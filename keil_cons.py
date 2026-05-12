@@ -109,7 +109,7 @@ def get_log_path(project_path: str, command: str = None) -> str:
 
 def should_use_log(command: str) -> bool:
     """判断命令是否默认生成日志文件。"""
-    return command in {"-b", "-r", "-cr"}
+    return command in {"-b", "-r", "-cr", "-f"}
 
 
 def run_uv4(uv4_path: str, project_path: str, command: str,
